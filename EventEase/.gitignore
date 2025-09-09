@@ -1,0 +1,13 @@
+# Idea / Java / Maven
+*.iml
+.idea/
+backend/target/
+
+# Node / RN (للموبايل لاحقاً)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+
+# OS
+.DS_Store
