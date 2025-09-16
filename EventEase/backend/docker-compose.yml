@@ -1,11 +1,11 @@
 services:
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./Dockerfile
     container_name: eventease-api
     ports:
-      - "${API_PORT:-9010}:8080"
+      - "${API_PORT:-9020}:9020"
     environment:
       SPRING_DATA_MONGODB_URI: "${SPRING_DATA_MONGODB_URI}"
       SPRING_PROFILES_ACTIVE: "dev"
@@ -26,6 +26,7 @@ services:
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
+
 
 volumes:
   mongo_data:
