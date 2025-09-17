@@ -17,8 +17,7 @@ services:
   mongo:
     image: mongo:6
     container_name: eventease-mongo
-    ports:
-      - "${MONGO_PORT:-27018}:27017"
+
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: rootpass

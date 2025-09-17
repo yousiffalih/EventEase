@@ -3,13 +3,14 @@ package com.eventease.backend.event;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.bson.types.ObjectId;
 
 import java.time.Instant;
 
 @Document(collection = "events")
 public class Event {
     @Id
-    private String id;
+    private ObjectId id;  // 👈 بدل String
 
     private String title;
     private String description;
@@ -28,9 +29,12 @@ public class Event {
     private Instant createdAt = Instant.now();
 
     // --- Getters & Setters ---
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-
+    public String getId() {
+        return id != null ? id.toHexString() : null;
+    }
+    public void setId(String id) {
+        this.id = id != null ? new ObjectId(id) : null;
+    }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
