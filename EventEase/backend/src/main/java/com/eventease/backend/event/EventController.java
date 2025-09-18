@@ -42,19 +42,6 @@ public class EventController {
     }
 
 
-    // ✅ إضافة حدث جديد
-    @PostMapping
-    public ResponseEntity<EventDetail> create(@RequestBody Event event) {
-        event.setCreatedAt(Instant.now());
-        event.setReservedCount(0);
-        event.setStatus("ACTIVE");
 
-        Event saved = repo.save(event);
 
-        return ResponseEntity.ok(new EventDetail(
-            saved.getId(), saved.getTitle(), saved.getDescription(), saved.getDate(),
-            saved.getLocation(), saved.getCapacity(),
-            Math.max(0, saved.getCapacity() - saved.getReservedCount())
-        ));
-    }
 }
