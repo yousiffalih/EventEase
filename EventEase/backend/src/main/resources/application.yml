@@ -1,7 +1,0 @@
-server:
-  port: 8080
-
-spring:
-  data:
-    mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://eventease:eventease123@localhost:27018/eventease?authSource=admin}

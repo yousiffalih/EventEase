@@ -2,6 +2,7 @@ package com.eventease.backend.reservation;
 
 import com.eventease.backend.event.Event;
 import com.eventease.backend.event.EventRepository;
+import com.eventease.backend.reservation.dto.RejectRequest;
 import com.eventease.backend.reservation.dto.ReservationRequest;
 import com.eventease.backend.reservation.dto.ReservationResponse;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +54,7 @@ public class ReservationController {
     }
 
     // --- لستة الحجوزات حسب المستخدم ---
+    // --- لستة الحجوزات حسب المستخدم ---
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<ReservationResponse>> listByUser(@PathVariable String userId) {
         var reservations = reservationRepo.findByUserId(userId).stream().map(r ->
@@ -67,6 +69,7 @@ public class ReservationController {
         ).toList();
         return ResponseEntity.ok(reservations);
     }
+
 
     // --- قبول الحجز ---
     @PostMapping("/{id}/approve")
@@ -88,13 +91,14 @@ public class ReservationController {
     }
 
     // --- رفض الحجز ---
+    // --- رفض الحجز ---
     @PostMapping("/{id}/reject")
-    public ResponseEntity<ReservationResponse> reject(@PathVariable String id, @RequestBody String reason) {
+    public ResponseEntity<ReservationResponse> reject(@PathVariable String id, @RequestBody RejectRequest body) {
         var reservation = reservationRepo.findById(id)
             .orElseThrow(() -> new RuntimeException("Reservation not found"));
 
         reservation.setStatus("REFUSED");
-        reservation.setReason(reason);
+        reservation.setReason(body.reason());
         reservationRepo.save(reservation);
 
         return ResponseEntity.ok(new ReservationResponse(
@@ -106,4 +110,5 @@ public class ReservationController {
             reservation.getCreatedAt()
         ));
     }
+
 }
