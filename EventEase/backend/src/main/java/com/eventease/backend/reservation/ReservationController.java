@@ -54,21 +54,28 @@ public class ReservationController {
     }
 
     // --- لستة الحجوزات حسب المستخدم ---
-    // --- لستة الحجوزات حسب المستخدم ---
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<ReservationResponse>> listByUser(@PathVariable String userId) {
-        var reservations = reservationRepo.findByUserId(userId).stream().map(r ->
-            new ReservationResponse(
+    public ResponseEntity<?> listByUser(@PathVariable String userId) {
+        // تحقق هل اليوزر موجود
+        boolean userExists = true; // TODO: شيك من UserRepository
+        if (!userExists) {
+            return ResponseEntity.status(404).body("USER_NOT_FOUND");
+        }
+
+        var reservations = reservationRepo.findByUserId(userId).stream()
+            .map(r -> new ReservationResponse(
                 r.getId(),
                 r.getEventId(),
                 r.getUserId(),
                 r.getStatus(),
                 r.getReason(),
                 r.getCreatedAt()
-            )
-        ).toList();
+            ))
+            .toList();
+
         return ResponseEntity.ok(reservations);
     }
+
 
 
     // --- قبول الحجز ---
@@ -88,6 +95,16 @@ public class ReservationController {
             reservation.getReason(),
             reservation.getCreatedAt()
         ));
+    }
+    // --- إلغاء الحجز ---
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> cancel(@PathVariable String id) {
+        var reservation = reservationRepo.findById(id)
+            .orElseThrow(() -> new RuntimeException("RESERVATION_NOT_FOUND"));
+
+        reservationRepo.delete(reservation);
+
+        return ResponseEntity.ok("Reservation cancelled successfully");
     }
 
     // --- رفض الحجز ---
