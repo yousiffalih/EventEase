@@ -1,34 +1,31 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Button, ActivityIndicator, StyleSheet, Alert } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { View, Text, FlatList, ActivityIndicator, StyleSheet, TouchableOpacity, Modal, Button, Alert } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-interface EventDetail {
+interface Event {
   id: string;
   title: string;
   description: string;
   date: string;
-  location: string;
   capacity: number;
   available: number;
 }
 
-export default function EventDetailsPage() {
-  const { id } = useLocalSearchParams();
-  const [event, setEvent] = useState<EventDetail | null>(null);
+export default function EventsPage() {
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null); // 👈 للـ Modal
 
   useEffect(() => {
     axios
-      .get(`http://localhost:9020/api/events/${id}`)
-      .then((res) => setEvent(res.data))
-      .catch(() => Alert.alert("❌ Error", "Failed to fetch event details"))
+      .get("http://localhost:9020/api/events")
+      .then((res) => setEvents(res.data))
+      .catch((err) => console.error("❌ Error fetching events:", err))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, []);
 
-  const handleReserve = async () => {
+  const handleReserve = async (eventId: string) => {
     try {
       const userId = await AsyncStorage.getItem("userId");
       if (!userId) {
@@ -37,12 +34,12 @@ export default function EventDetailsPage() {
       }
 
       await axios.post("http://localhost:9020/api/reservations", {
-        eventId: id,
-        userId: userId,
+        eventId,
+        userId,
       });
 
       Alert.alert("✅ Success", "Reservation created successfully!");
-      router.push("/reservations");
+      setSelectedEvent(null); // اغلاق الـ Modal بعد الحجز
     } catch (err: any) {
       Alert.alert("❌ Error", err.response?.data || "Reservation failed");
     }
@@ -52,34 +49,89 @@ export default function EventDetailsPage() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#2ecc71" />
-        <Text>Loading event details...</Text>
-      </View>
-    );
-  }
-
-  if (!event) {
-    return (
-      <View style={styles.center}>
-        <Text>❌ Event not found</Text>
+        <Text>Loading events...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{event.title}</Text>
-      <Text>{event.description}</Text>
-      <Text>Date: {new Date(event.date).toLocaleString()}</Text>
-      <Text>Location: {event.location}</Text>
-      <Text>Available: {event.available} / {event.capacity}</Text>
+      <FlatList
+        data={events}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity style={styles.card} onPress={() => setSelectedEvent(item)}>
+            <Text style={styles.title}>{item.title}</Text>
+            <Text>{item.description}</Text>
+            <Text>Date: {new Date(item.date).toLocaleDateString()}</Text>
+            <Text>
+              Available: {item.available}/{item.capacity}
+            </Text>
+            <Text style={styles.link}>👉 View Details</Text>
+          </TouchableOpacity>
+        )}
+      />
 
-      <Button title="Reserve a Place" onPress={handleReserve} disabled={event.available <= 0} />
+      {/* ✅ Modal لعرض التفاصيل */}
+      <Modal visible={!!selectedEvent} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            {selectedEvent && (
+              <>
+                <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
+                <Text>{selectedEvent.description}</Text>
+                <Text>Date: {new Date(selectedEvent.date).toLocaleString()}</Text>
+                <Text>
+                  Available: {selectedEvent.available}/{selectedEvent.capacity}
+                </Text>
+
+                <Button
+                  title="Reserve"
+                  onPress={() => handleReserve(selectedEvent.id)}
+                  disabled={selectedEvent.available <= 0}
+                />
+                <Button title="Close" onPress={() => setSelectedEvent(null)} color="red" />
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  card: {
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 10,
+    backgroundColor: "#f9f9f9",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  title: { fontSize: 18, fontWeight: "bold", marginBottom: 6 },
+  link: { marginTop: 10, color: "blue", fontWeight: "bold" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 10,
+    width: "80%",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  modalTitle: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
 });
