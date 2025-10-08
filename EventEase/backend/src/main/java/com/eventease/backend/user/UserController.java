@@ -26,9 +26,16 @@ public class UserController {
         if (repo.findByEmail(user.getEmail()).isPresent()) {
             return ResponseEntity.badRequest().build();
         }
-        user.setPassword(passwordEncoder.encode(user.getPassword())); // 👈 hash password
+
+        // ✅ Default role for normal users
+        if (user.getRole() == null || user.getRole().isEmpty()) {
+            user.setRole("USER");
+        }
+
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         return ResponseEntity.ok(repo.save(user));
     }
+
 
 
     // ✅ Login (بسيط حالياً بدون JWT)
