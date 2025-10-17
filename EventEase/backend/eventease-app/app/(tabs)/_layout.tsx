@@ -76,13 +76,20 @@ export default function Layout() {
         options={{
           title: "Admin",
           tabBarIcon: ({ color }) => (
-            <Ionicons
-              name="shield-checkmark"
-              color={color}
-              size={20}
-            />
+            <Ionicons name="shield-checkmark" color={color} size={20} />
           ),
           href: role === "ADMIN" ? undefined : null,
+        }}
+      />
+
+      {/* 🔄 Synchronisation tab (for everyone) */}
+      <Tabs.Screen
+        name="sync"
+        options={{
+          title: "Sync",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="sync" color={color} size={20} />
+          ),
         }}
       />
     </Tabs>

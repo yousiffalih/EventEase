@@ -5,6 +5,8 @@ import com.eventease.backend.event.EventRepository;
 import com.eventease.backend.reservation.dto.RejectRequest;
 import com.eventease.backend.reservation.dto.ReservationRequest;
 import com.eventease.backend.reservation.dto.ReservationResponse;
+import com.eventease.backend.user.User;
+import com.eventease.backend.user.UserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,10 +18,16 @@ public class ReservationController {
 
     private final ReservationRepository reservationRepo;
     private final EventRepository eventRepo;
+    private final UserRepository userRepo;
 
-    public ReservationController(ReservationRepository reservationRepo, EventRepository eventRepo) {
+    public ReservationController(
+        ReservationRepository reservationRepo,
+        EventRepository eventRepo,
+        UserRepository userRepo
+    ) {
         this.reservationRepo = reservationRepo;
         this.eventRepo = eventRepo;
+        this.userRepo = userRepo;
     }
 
     // --- إنشاء حجز جديد ---
@@ -36,47 +44,32 @@ public class ReservationController {
         reservation.setEventId(request.eventId());
         reservation.setUserId(request.userId());
         reservation.setStatus("PENDING");
+        reservationRepo.save(reservation);
 
-        reservation = reservationRepo.save(reservation);
-
-        // نحدث عدد المحجوزين
+        // 🟢 تحديث عدد المحجوزين
         event.setReservedCount(event.getReservedCount() + 1);
         eventRepo.save(event);
 
-        return ResponseEntity.ok(new ReservationResponse(
-            reservation.getId(),
-            reservation.getEventId(),
-            reservation.getUserId(),
-            reservation.getStatus(),
-            reservation.getReason(),
-            reservation.getCreatedAt()
-        ));
+        return ResponseEntity.ok(toResponse(reservation));
+    }
+
+    // --- جميع الحجوزات الخاصة بالأدمن مع تفاصيل المستخدم ---
+    @GetMapping("/admin/all")
+    public ResponseEntity<List<ReservationResponse>> listAll() {
+        List<ReservationResponse> responses = reservationRepo.findAll().stream()
+            .map(this::toResponse)
+            .toList();
+        return ResponseEntity.ok(responses);
     }
 
     // --- لستة الحجوزات حسب المستخدم ---
     @GetMapping("/user/{userId}")
-    public ResponseEntity<?> listByUser(@PathVariable String userId) {
-        // تحقق هل اليوزر موجود
-        boolean userExists = true; // TODO: شيك من UserRepository
-        if (!userExists) {
-            return ResponseEntity.status(404).body("USER_NOT_FOUND");
-        }
-
+    public ResponseEntity<List<ReservationResponse>> listByUser(@PathVariable String userId) {
         var reservations = reservationRepo.findByUserId(userId).stream()
-            .map(r -> new ReservationResponse(
-                r.getId(),
-                r.getEventId(),
-                r.getUserId(),
-                r.getStatus(),
-                r.getReason(),
-                r.getCreatedAt()
-            ))
+            .map(this::toResponse)
             .toList();
-
         return ResponseEntity.ok(reservations);
     }
-
-
 
     // --- قبول الحجز ---
     @PostMapping("/{id}/approve")
@@ -86,28 +79,9 @@ public class ReservationController {
 
         reservation.setStatus("APPROVED");
         reservationRepo.save(reservation);
-
-        return ResponseEntity.ok(new ReservationResponse(
-            reservation.getId(),
-            reservation.getEventId(),
-            reservation.getUserId(),
-            reservation.getStatus(),
-            reservation.getReason(),
-            reservation.getCreatedAt()
-        ));
-    }
-    // --- إلغاء الحجز ---
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> cancel(@PathVariable String id) {
-        var reservation = reservationRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("RESERVATION_NOT_FOUND"));
-
-        reservationRepo.delete(reservation);
-
-        return ResponseEntity.ok("Reservation cancelled successfully");
+        return ResponseEntity.ok(toResponse(reservation));
     }
 
-    // --- رفض الحجز ---
     // --- رفض الحجز ---
     @PostMapping("/{id}/reject")
     public ResponseEntity<ReservationResponse> reject(@PathVariable String id, @RequestBody RejectRequest body) {
@@ -118,14 +92,40 @@ public class ReservationController {
         reservation.setReason(body.reason());
         reservationRepo.save(reservation);
 
-        return ResponseEntity.ok(new ReservationResponse(
-            reservation.getId(),
-            reservation.getEventId(),
-            reservation.getUserId(),
-            reservation.getStatus(),
-            reservation.getReason(),
-            reservation.getCreatedAt()
-        ));
+        return ResponseEntity.ok(toResponse(reservation));
     }
 
+    // --- إلغاء الحجز ---
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> cancel(@PathVariable String id) {
+        var reservation = reservationRepo.findById(id)
+            .orElseThrow(() -> new RuntimeException("RESERVATION_NOT_FOUND"));
+
+        // 🟢 نخصم واحد من المحجوزين لما المستخدم يلغي الحجز
+        eventRepo.findById(reservation.getEventId()).ifPresent(event -> {
+            event.setReservedCount(Math.max(0, event.getReservedCount() - 1));
+            eventRepo.save(event);
+        });
+
+        reservationRepo.delete(reservation);
+        return ResponseEntity.ok("Reservation cancelled successfully");
+    }
+
+    // 🧠 تحويل Reservation إلى Response مع بيانات المستخدم
+    private ReservationResponse toResponse(Reservation r) {
+        User user = userRepo.findById(r.getUserId()).orElse(null);
+        String username = user != null ? user.getUsername() : "Unknown";
+        String email = user != null ? user.getEmail() : "Unknown";
+
+        return new ReservationResponse(
+            r.getId(),
+            r.getEventId(),
+            r.getUserId(),
+            r.getStatus(),
+            r.getReason(),
+            r.getCreatedAt(),
+            username,
+            email
+        );
+    }
 }

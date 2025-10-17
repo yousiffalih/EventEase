@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 
 interface Reservation {
   id: string;
@@ -15,7 +15,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const fetchReservations = async () => {
+  const fetchReservations = useCallback(async () => {
     const userId = await AsyncStorage.getItem("userId");
     if (!userId) {
       Alert.alert("❌ Error", "You must login first!");
@@ -32,11 +32,18 @@ export default function ReservationsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     fetchReservations();
-  }, []);
+  }, [fetchReservations]);
+
+  // ✅ Recharger les réservations quand on revient sur la page
+  useFocusEffect(
+    useCallback(() => {
+      fetchReservations();
+    }, [fetchReservations])
+  );
 
   const handleCancel = async (reservationId: string) => {
     try {

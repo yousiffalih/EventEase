@@ -8,5 +8,7 @@ public record ReservationResponse(
     String userId,
     String status,
     String reason,
-    Instant createdAt
+    Instant createdAt,
+    String username,
+    String userEmail
 ) {}

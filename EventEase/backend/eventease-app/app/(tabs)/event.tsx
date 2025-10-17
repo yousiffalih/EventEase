@@ -1,4 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import { isOnline } from "../../utils/network";
+import { addReservation, getPendingReservations, markReservationSynced } from "../../utils/database";
+import { useFocusEffect, useRouter } from "expo-router";
+
 import {
   View,
   Text,
@@ -12,7 +16,6 @@ import {
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
 
 interface Event {
   id: string;
@@ -29,13 +32,30 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    axios
-      .get("http://localhost:9020/api/events")
-      .then((res) => setEvents(res.data))
-      .catch((err) => console.error("❌ Error fetching events:", err))
-      .finally(() => setLoading(false));
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get("http://10.6.251.93:9020/api/events");
+      setEvents(res.data);
+    } catch (err) {
+      console.error("❌ Error fetching events:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // ✅ Charger les événements au montage
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  // ✅ Recharger les événements quand on revient sur la page
+  useFocusEffect(
+    useCallback(() => {
+      fetchEvents();
+    }, [fetchEvents])
+  );
+  
 
   const handleReserve = async (eventId: string) => {
     try {
@@ -44,18 +64,32 @@ export default function EventsPage() {
         Alert.alert("❌ Error", "You must login first!");
         return;
       }
-
-      await axios.post("http://localhost:9020/api/reservations", {
-        eventId,
-        userId,
-      });
-
-      Alert.alert("✅ Success", "Reservation created successfully!");
+  
+      const event = events.find((e) => e.id === eventId);
+      const online = await isOnline();
+  
+      if (online) {
+        try {
+          await axios.post("http://10.6.251.93:9020/api/reservations", { eventId, userId });
+          Alert.alert("✅ Success", "Reservation sent to server!");
+          // ✅ Recharger les événements pour voir les places mises à jour
+          await fetchEvents();
+        } catch (err) {
+          Alert.alert("⚠️ Server error", "Saved locally for sync later.");
+          await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+        }
+      } else {
+        await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+        Alert.alert("📴 Offline", "Reservation saved locally until you're online.");
+      }
+  
       setSelectedEvent(null);
-    } catch (err: any) {
-      Alert.alert("❌ Error", err.response?.data || "Reservation failed");
+    } catch (err) {
+      console.error("❌ Error:", err);
+      Alert.alert("❌ Error", "Unexpected error while reserving.");
     }
   };
+  
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem("token");

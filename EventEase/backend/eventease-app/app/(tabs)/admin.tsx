@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, Button, FlatList, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import axios from "axios";
+import { useFocusEffect } from "expo-router";
 
 interface Reservation {
   id: string;
@@ -13,7 +14,7 @@ export default function AdminPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchReservations = async () => {
+  const fetchReservations = useCallback(async () => {
     try {
       const res = await axios.get("http://localhost:9020/api/admin/reservations");
       setReservations(res.data);
@@ -23,7 +24,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleAction = async (id: string, action: "approve" | "reject") => {
     try {
@@ -37,7 +38,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchReservations();
-  }, []);
+  }, [fetchReservations]);
+
+  // ✅ Recharger les réservations quand on revient sur la page
+  useFocusEffect(
+    useCallback(() => {
+      fetchReservations();
+    }, [fetchReservations])
+  );
 
   if (loading) {
     return (
