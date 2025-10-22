@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { isOnline } from "../../utils/network";
-import { addReservation, getPendingReservations, markReservationSynced } from "../../utils/database";
+import { addReservation } from "../../utils/database";
 import { useFocusEffect, useRouter } from "expo-router";
+import { API_ENDPOINTS } from "../../config/api";
 
 import {
   View,
@@ -12,7 +13,8 @@ import {
   TouchableOpacity,
   Modal,
   Button,
-  Alert
+  Alert,
+  Platform
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,7 +37,7 @@ export default function EventsPage() {
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://10.6.251.93:9020/api/events");
+      const res = await axios.get(API_ENDPOINTS.EVENTS);
       setEvents(res.data);
     } catch (err) {
       console.error("❌ Error fetching events:", err);
@@ -70,17 +72,36 @@ export default function EventsPage() {
   
       if (online) {
         try {
-          await axios.post("http://10.6.251.93:9020/api/reservations", { eventId, userId });
+          await axios.post(API_ENDPOINTS.RESERVATIONS, { eventId, userId });
           Alert.alert("✅ Success", "Reservation sent to server!");
           // ✅ Recharger les événements pour voir les places mises à jour
           await fetchEvents();
-        } catch (err) {
-          Alert.alert("⚠️ Server error", "Saved locally for sync later.");
-          await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+        } catch (err: any) {
+          // Handle specific HTTP errors
+          if (err.response?.status === 409) {
+            Alert.alert("⚠️ Duplicate", "You already have a reservation for this event.");
+          } else if (err.response?.status === 400) {
+            Alert.alert("⚠️ Full", err.response?.data || "No more places available.");
+          } else if (err.response?.status === 404) {
+            Alert.alert("❌ Error", "Event not found.");
+          } else {
+            // Only save locally for network errors on native platforms
+            if (Platform.OS !== 'web') {
+              Alert.alert("⚠️ Server error", "Saved locally for sync later.");
+              await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+            } else {
+              Alert.alert("❌ Server error", "Please try again later.");
+            }
+          }
         }
       } else {
-        await addReservation(event?.title || "Unknown Event", "PENDING", 1);
-        Alert.alert("📴 Offline", "Reservation saved locally until you're online.");
+        // Offline mode - only on native platforms
+        if (Platform.OS !== 'web') {
+          await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+          Alert.alert("📴 Offline", "Reservation saved locally until you're online.");
+        } else {
+          Alert.alert("📴 Offline", "You need an internet connection to make reservations.");
+        }
       }
   
       setSelectedEvent(null);

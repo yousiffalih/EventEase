@@ -4,6 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPendingReservations, markReservationSynced } from "../../utils/database";
 import { isOnline } from "../../utils/network";
+import { API_ENDPOINTS } from "../../config/api";
 
 export default function SyncPage() {
   const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ export default function SyncPage() {
 
     for (const r of pending) {
       try {
-        await axios.post("http://10.6.251.93:9020/api/reservations", {
+        await axios.post(API_ENDPOINTS.RESERVATIONS, {
           eventTitle: r.eventTitle,
           userId,
         });

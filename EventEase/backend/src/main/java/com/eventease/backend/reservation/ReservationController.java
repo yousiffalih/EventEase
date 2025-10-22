@@ -7,6 +7,7 @@ import com.eventease.backend.reservation.dto.ReservationRequest;
 import com.eventease.backend.reservation.dto.ReservationResponse;
 import com.eventease.backend.user.User;
 import com.eventease.backend.user.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,25 +33,50 @@ public class ReservationController {
 
     // --- إنشاء حجز جديد ---
     @PostMapping
-    public ResponseEntity<ReservationResponse> create(@RequestBody ReservationRequest request) {
-        Event event = eventRepo.findById(request.eventId())
-            .orElseThrow(() -> new RuntimeException("Event not found"));
-
-        if (event.getReservedCount() >= event.getCapacity()) {
-            throw new RuntimeException("No more places available");
+    public ResponseEntity<?> create(@RequestBody ReservationRequest request) {
+        // Validate user exists
+        if (!userRepo.existsById(request.userId())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("User not found or not authenticated");
         }
 
-        Reservation reservation = new Reservation();
-        reservation.setEventId(request.eventId());
-        reservation.setUserId(request.userId());
-        reservation.setStatus("PENDING");
-        reservationRepo.save(reservation);
+        Event event = eventRepo.findById(request.eventId())
+            .orElse(null);
+        
+        if (event == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("Event not found");
+        }
 
-        // 🟢 تحديث عدد المحجوزين
-        event.setReservedCount(event.getReservedCount() + 1);
-        eventRepo.save(event);
+        // Check for duplicate reservation
+        if (reservationRepo.existsByEventIdAndUserId(request.eventId(), request.userId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("You already have a reservation for this event");
+        }
 
-        return ResponseEntity.ok(toResponse(reservation));
+        // Check capacity with synchronized block to prevent race conditions
+        synchronized (this) {
+            // Reload event to get latest state
+            event = eventRepo.findById(request.eventId())
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+                
+            if (event.getReservedCount() >= event.getCapacity()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("No more places available");
+            }
+
+            Reservation reservation = new Reservation();
+            reservation.setEventId(request.eventId());
+            reservation.setUserId(request.userId());
+            reservation.setStatus("PENDING");
+            reservationRepo.save(reservation);
+
+            // 🟢 تحديث عدد المحجوزين
+            event.setReservedCount(event.getReservedCount() + 1);
+            eventRepo.save(event);
+
+            return ResponseEntity.ok(toResponse(reservation));
+        }
     }
 
     // --- جميع الحجوزات الخاصة بالأدمن مع تفاصيل المستخدم ---
@@ -73,9 +99,14 @@ public class ReservationController {
 
     // --- قبول الحجز ---
     @PostMapping("/{id}/approve")
-    public ResponseEntity<ReservationResponse> approve(@PathVariable String id) {
+    public ResponseEntity<?> approve(@PathVariable String id) {
         var reservation = reservationRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("Reservation not found"));
+            .orElse(null);
+        
+        if (reservation == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("Reservation not found");
+        }
 
         reservation.setStatus("APPROVED");
         reservationRepo.save(reservation);
@@ -84,9 +115,14 @@ public class ReservationController {
 
     // --- رفض الحجز ---
     @PostMapping("/{id}/reject")
-    public ResponseEntity<ReservationResponse> reject(@PathVariable String id, @RequestBody RejectRequest body) {
+    public ResponseEntity<?> reject(@PathVariable String id, @RequestBody RejectRequest body) {
         var reservation = reservationRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("Reservation not found"));
+            .orElse(null);
+        
+        if (reservation == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("Reservation not found");
+        }
 
         reservation.setStatus("REFUSED");
         reservation.setReason(body.reason());
@@ -99,7 +135,12 @@ public class ReservationController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> cancel(@PathVariable String id) {
         var reservation = reservationRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("RESERVATION_NOT_FOUND"));
+            .orElse(null);
+        
+        if (reservation == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("Reservation not found");
+        }
 
         // 🟢 نخصم واحد من المحجوزين لما المستخدم يلغي الحجز
         eventRepo.findById(reservation.getEventId()).ifPresent(event -> {

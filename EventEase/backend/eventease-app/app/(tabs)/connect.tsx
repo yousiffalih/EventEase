@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from "reac
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { API_ENDPOINTS } from "../../config/api";
 
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,7 +21,7 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://10.6.251.93:9020/api/users/login", { email, password });
+      const res = await axios.post(API_ENDPOINTS.LOGIN, { email, password });
       await AsyncStorage.setItem("token", res.data.token);
       await AsyncStorage.setItem("userId", res.data.userId);
       await AsyncStorage.setItem("role", res.data.role);
@@ -42,7 +43,7 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://10.6.251.93:9020/api/users/signup", {
+      const res = await axios.post(API_ENDPOINTS.SIGNUP, {
         username,
         email,
         password,

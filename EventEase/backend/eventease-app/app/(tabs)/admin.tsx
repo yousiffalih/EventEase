@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, Button, FlatList, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import axios from "axios";
 import { useFocusEffect } from "expo-router";
+import { API_BASE_URL } from "../../config/api";
 
 interface Reservation {
   id: string;
@@ -16,7 +17,7 @@ export default function AdminPage() {
 
   const fetchReservations = useCallback(async () => {
     try {
-      const res = await axios.get("http://localhost:9020/api/admin/reservations");
+      const res = await axios.get(`${API_BASE_URL}/admin/reservations`);
       setReservations(res.data);
     } catch (err) {
       console.error(err);
@@ -28,7 +29,7 @@ export default function AdminPage() {
 
   const handleAction = async (id: string, action: "approve" | "reject") => {
     try {
-      await axios.put(`http://localhost:9020/api/admin/reservations/${id}/${action}`);
+      await axios.put(`${API_BASE_URL}/admin/reservations/${id}/${action}`);
       Alert.alert("✅ Success", `Reservation ${action}ed successfully`);
       fetchReservations();
     } catch (err) {

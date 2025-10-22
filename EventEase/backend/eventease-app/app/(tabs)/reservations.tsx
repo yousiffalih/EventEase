@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOp
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter, useFocusEffect } from "expo-router";
+import { API_BASE_URL } from "../../config/api";
 
 interface Reservation {
   id: string;
@@ -24,7 +25,7 @@ export default function ReservationsPage() {
     }
 
     try {
-      const res = await axios.get(`http://localhost:9020/api/reservations/user/${userId}`);
+      const res = await axios.get(`${API_BASE_URL}/reservations/user/${userId}`);
       setReservations(res.data);
     } catch (err) {
       console.error(err);
@@ -47,7 +48,7 @@ export default function ReservationsPage() {
 
   const handleCancel = async (reservationId: string) => {
     try {
-      await axios.delete(`http://localhost:9020/api/reservations/${reservationId}`);
+      await axios.delete(`${API_BASE_URL}/reservations/${reservationId}`);
       Alert.alert("✅ Success", "Reservation cancelled!");
       fetchReservations(); // تحديث القائمة
     } catch (err) {
