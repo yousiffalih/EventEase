@@ -100,7 +100,7 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/pro403-6-bdd')
     
     steps:
       # 📥 Checkout du code
@@ -155,10 +155,9 @@ jobs:
     name: Deploy to Server
     runs-on: ubuntu-latest
     needs: docker-build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/pro403-6-bdd'
     environment:
       name: production
-      url: http://${{ secrets.SERVER_HOST }}:9020
     
     steps:
       # 📥 Checkout du code
