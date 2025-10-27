@@ -7,25 +7,58 @@ const db = SQLite.openDatabaseSync("eventease.db");
 export const initDB = async () => {
   if (!db) return;
 
-  await db.execAsync(
-    `CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      description TEXT,
-      date TEXT,
-      capacity INTEGER,
-      available INTEGER
-    );`
-  );
-  await db.execAsync(
-    `CREATE TABLE IF NOT EXISTS reservations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      eventTitle TEXT,
-      status TEXT,
-      pending_sync INTEGER DEFAULT 0
-    );`
-  );
-  
+  try {
+    // Create events table
+    await db.execAsync(
+      `CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        description TEXT,
+        date TEXT,
+        capacity INTEGER,
+        available INTEGER
+      );`
+    );
+    
+    // Create reservations table with pending_sync column
+    await db.execAsync(
+      `CREATE TABLE IF NOT EXISTS reservations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        eventTitle TEXT,
+        status TEXT,
+        pending_sync INTEGER DEFAULT 0
+      );`
+    );
+    
+    // Migration: Add pending_sync column if it doesn't exist
+    try {
+      const result = await db.getAllAsync(`PRAGMA table_info(reservations);`);
+      const hasPendingSync = result.some((col: any) => col.name === 'pending_sync');
+      
+      if (!hasPendingSync) {
+        console.log('🔄 Migrating database: adding pending_sync column');
+        await db.execAsync(`ALTER TABLE reservations ADD COLUMN pending_sync INTEGER DEFAULT 0;`);
+        console.log('✅ Migration completed');
+      }
+    } catch (migrationError) {
+      // If migration fails, recreate the table
+      console.warn('⚠️ Migration failed, recreating table:', migrationError);
+      await db.execAsync(`DROP TABLE IF EXISTS reservations;`);
+      await db.execAsync(
+        `CREATE TABLE reservations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          eventTitle TEXT,
+          status TEXT,
+          pending_sync INTEGER DEFAULT 0
+        );`
+      );
+    }
+    
+    console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing database:', error);
+    throw error;
+  }
 };
 
 // 🟢 إضافة حدث

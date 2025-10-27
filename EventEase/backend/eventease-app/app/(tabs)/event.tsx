@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { isOnline } from "../../utils/network";
-import { addReservation } from "../../utils/database";
 import { useFocusEffect, useRouter } from "expo-router";
 import { API_ENDPOINTS } from "../../config/api";
+import { addToQueue, processQueue, startNetworkListener, getPendingCount } from "../../utils/offlineQueue";
 
 import {
   View,
@@ -32,6 +32,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const router = useRouter();
 
   const fetchEvents = useCallback(async () => {
@@ -46,16 +47,44 @@ export default function EventsPage() {
     }
   }, []);
 
-  // ✅ Charger les événements au montage
+  // Update pending count
+  const updatePendingCount = useCallback(async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+  }, []);
+
+  // Process queue when connection is restored
+  const handleConnectionRestored = useCallback(async () => {
+    console.log('🌐 Connection restored, processing queue...');
+    const result = await processQueue();
+    if (result.success > 0) {
+      Alert.alert(
+        "✅ Reservations Sent",
+        `${result.success} reservation(s) sent successfully!`
+      );
+      await fetchEvents(); // Refresh events
+      await updatePendingCount();
+    }
+  }, [fetchEvents, updatePendingCount]);
+
+  // Setup network listener
+  useEffect(() => {
+    const unsubscribe = startNetworkListener(handleConnectionRestored);
+    return () => unsubscribe();
+  }, [handleConnectionRestored]);
+
+  // Load events and pending count on mount
   useEffect(() => {
     fetchEvents();
-  }, [fetchEvents]);
+    updatePendingCount();
+  }, [fetchEvents, updatePendingCount]);
 
-  // ✅ Recharger les événements quand on revient sur la page
+  // Reload when returning to page
   useFocusEffect(
     useCallback(() => {
       fetchEvents();
-    }, [fetchEvents])
+      updatePendingCount();
+    }, [fetchEvents, updatePendingCount])
   );
   
 
@@ -74,8 +103,8 @@ export default function EventsPage() {
         try {
           await axios.post(API_ENDPOINTS.RESERVATIONS, { eventId, userId });
           Alert.alert("✅ Success", "Reservation sent to server!");
-          // ✅ Recharger les événements pour voir les places mises à jour
           await fetchEvents();
+          await updatePendingCount();
         } catch (err: any) {
           // Handle specific HTTP errors
           if (err.response?.status === 409) {
@@ -85,20 +114,28 @@ export default function EventsPage() {
           } else if (err.response?.status === 404) {
             Alert.alert("❌ Error", "Event not found.");
           } else {
-            // Only save locally for network errors on native platforms
+            // Server error - add to queue for retry
             if (Platform.OS !== 'web') {
-              Alert.alert("⚠️ Server error", "Saved locally for sync later.");
-              await addReservation(event?.title || "Unknown Event", "PENDING", 1);
+              await addToQueue(eventId, userId, event?.title || "Unknown Event");
+              await updatePendingCount();
+              Alert.alert(
+                "⏳ Queued",
+                "Server error. Reservation queued and will be sent when connection is stable."
+              );
             } else {
               Alert.alert("❌ Server error", "Please try again later.");
             }
           }
         }
       } else {
-        // Offline mode - only on native platforms
+        // Offline mode - add to queue
         if (Platform.OS !== 'web') {
-          await addReservation(event?.title || "Unknown Event", "PENDING", 1);
-          Alert.alert("📴 Offline", "Reservation saved locally until you're online.");
+          await addToQueue(eventId, userId, event?.title || "Unknown Event");
+          await updatePendingCount();
+          Alert.alert(
+            "⏳ Waiting for Connection",
+            `Reservation for "${event?.title}" is queued.\n\nIt will be sent automatically when internet connection is restored.`
+          );
         } else {
           Alert.alert("📴 Offline", "You need an internet connection to make reservations.");
         }
@@ -130,9 +167,16 @@ export default function EventsPage() {
 
   return (
     <View style={styles.container}>
-      {/* زر Logout */}
+      {/* Header with Logout and Pending Count */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Events</Text>
+        <View>
+          <Text style={styles.headerTitle}>Events</Text>
+          {pendingCount > 0 && (
+            <Text style={styles.pendingText}>
+              ⏳ {pendingCount} reservation{pendingCount > 1 ? 's' : ''} waiting...
+            </Text>
+          )}
+        </View>
         <Button title="Logout" onPress={handleLogout} color="red" />
       </View>
 
@@ -189,6 +233,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerTitle: { fontSize: 22, fontWeight: "bold", color: "#2c3e50" },
+  pendingText: { 
+    fontSize: 12, 
+    color: "#f39c12", 
+    marginTop: 4,
+    fontWeight: "600"
+  },
   card: {
     padding: 16,
     marginBottom: 12,

@@ -18,7 +18,7 @@ export const getEvents = async (): Promise<any[]> => {
 };
 
 // 🟣 إضافة حجز
-export const addReservation = async (eventTitle: string, status: string) => {
+export const addReservation = async (eventTitle: string, status: string, pending_sync = 0) => {
   console.warn("SQLite not available on web");
 };
 
@@ -26,4 +26,20 @@ export const addReservation = async (eventTitle: string, status: string) => {
 export const getReservations = async (): Promise<any[]> => {
   console.warn("SQLite not available on web");
   return [];
+};
+
+// 🟠 جلب الحجوزات الغير متزامنة
+export const getPendingReservations = async (): Promise<any[]> => {
+  console.warn("SQLite not available on web");
+  return [];
+};
+
+// 🟢 تحديث حالة التزامن بعد الإرسال
+export const markReservationSynced = async (id: number) => {
+  console.warn("SQLite not available on web");
+};
+
+// 🔵 حذف جميع الحجوزات المحلية
+export const clearLocalReservations = async () => {
+  console.warn("SQLite not available on web");
 };
