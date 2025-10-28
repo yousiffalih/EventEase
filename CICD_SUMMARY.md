@@ -1,369 +1,335 @@
-# 📋 Résumé de la Configuration CI/CD - EventEase
+# EventEase CI/CD Pipeline - Complete Summary
 
-## ✅ Fichiers Créés
+## 🎯 Overview
 
-### 1. Pipeline GitHub Actions
-
-| Fichier | Description | Statut |
-|---------|-------------|--------|
-| `.github/workflows/ci-cd.yml` | Pipeline principale avec 4 stages | ✅ Créé |
-| `.github/workflows/README.md` | Documentation de configuration | ✅ Créé |
-
-### 2. Scripts de Déploiement
-
-| Fichier | Description | Statut |
-|---------|-------------|--------|
-| `scripts/deploy.sh` | Script de déploiement multi-environnements | ✅ Créé |
-| `scripts/setup-server.sh` | Configuration automatique du serveur | ✅ Créé |
-| `scripts/validate-cicd.sh` | Validation de la configuration | ✅ Créé |
-| `scripts/README.md` | Documentation des scripts | ✅ Créé |
-
-### 3. Documentation
-
-| Fichier | Description | Statut |
-|---------|-------------|--------|
-| `o10_CICD_SABTI_Yousif.md` | Documentation complète CI/CD (Page 10) | ✅ Créé |
-| `QUICKSTART_CICD.md` | Guide de démarrage rapide | ✅ Créé |
-| `CICD_SUMMARY.md` | Ce fichier - Résumé | ✅ Créé |
+Modern CI/CD pipeline for EventEase following industry best practices:
+- ✅ Automated Build & Test
+- ✅ Integration tests with MongoDB
+- ✅ Self-hosted deployment with version control
+- ✅ Docker containerization
 
 ---
 
-## 🏗️ Architecture de la Pipeline
+## 📋 Pipeline Structure (3 Stages)
 
-### Stage 1: BUILD & TEST (5-7 min)
-- ✅ Checkout du code
-- ✅ Configuration Java 17
-- ✅ Compilation Maven
-- ✅ Exécution des tests avec Testcontainers
-- ✅ Génération de rapports
-- ✅ Upload des artifacts (JAR, rapports)
+### Stage 1: BUILD 🏗️
+- **Runner**: `ubuntu-latest` (GitHub-hosted)
+- **Purpose**: Compile the application
+- **Actions**:
+  - Checkout code
+  - Setup Java 17 + Maven with cache
+  - Build: `./mvnw clean package -DskipTests`
+  - Upload JAR artifact
 
-### Stage 2: DOCKER BUILD (3-5 min)
-- ✅ Configuration Docker Buildx
-- ✅ Login GitHub Container Registry
-- ✅ Build de l'image Docker
-- ✅ Push avec tags (latest, sha)
-- ✅ Cache optimisé
+### Stage 2: TEST 🧪
+- **Runner**: `ubuntu-latest` (GitHub-hosted)
+- **Purpose**: Run integration tests
+- **Services**: MongoDB 8.0 container
+- **Actions**:
+  - Download build artifact
+  - Run tests: `./mvnw test`
+  - Upload test results (retained 30 days)
 
-### Stage 3: DEPLOY (2-3 min)
-- ✅ Configuration SSH
-- ✅ Copie des fichiers sur le serveur
-- ✅ Pull de l'image Docker
-- ✅ Redémarrage des services (Docker Compose)
-- ✅ Health check automatique
-
-### Stage 4: QUALITY & SECURITY (3-5 min)
-- ✅ Analyse de sécurité des dépendances
-- ✅ Génération du rapport de couverture
-- ✅ Upload des rapports
-
-**Durée totale:** ≈ 13-20 minutes
-
----
-
-## 🚀 Déclencheurs
-
-La pipeline se déclenche automatiquement sur:
-- ✅ Push sur `main` ou `develop`
-- ✅ Pull Request vers `main`
-- ✅ Déclenchement manuel (workflow_dispatch)
+### Stage 3: DEPLOY 🚀
+- **Runner**: `self-hosted` (YOUR server)
+- **Condition**: Only on `main` or `develop` branches
+- **Actions**:
+  - Create `.env.prod` from GitHub secrets
+  - Extract version from `pom.xml`
+  - Stop old container
+  - Build new Docker image with version tag
+  - Start new container on port 8080
+  - Clean up old images
 
 ---
 
-## 📦 Artifacts Générés
+## 🔧 Setup Requirements
 
-Après chaque exécution:
+### 1. Self-Hosted Runner Setup
 
-| Artifact | Contenu | Rétention |
-|----------|---------|-----------|
-| `test-results` | Rapports JUnit + Surefire | 30 jours |
-| `eventease-backend-jar` | Fichier JAR compilé | 7 jours |
-| `coverage-report` | Rapport Jacoco HTML | 30 jours |
+**On your server in the salle:**
 
----
+```bash
+# Create runner directory
+mkdir -p ~/actions-runner && cd ~/actions-runner
 
-## ⚙️ Configuration Requise
+# Download runner (get fresh token from GitHub first!)
+curl -o actions-runner-linux-x64-2.329.0.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v2.329.0/actions-runner-linux-x64-2.329.0.tar.gz
 
-### Secrets GitHub (à configurer manuellement)
+# Validate
+echo "194f1e1e4bd02f80b7e9633fc546084d8d4e19f3928a324d512ea53430102e1d  actions-runner-linux-x64-2.329.0.tar.gz" | shasum -a 256 -c
 
-Aller dans: `Settings` → `Secrets and variables` → `Actions`
+# Extract
+tar xzf ./actions-runner-linux-x64-2.329.0.tar.gz
 
-| Secret | Description | Exemple |
+# Configure (get token from: https://github.com/yousiffalih/EventEase/settings/actions/runners/new)
+./config.sh --url https://github.com/yousiffalih/EventEase --token YOUR_TOKEN
+
+# Install as service
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+
+### 2. GitHub Secrets Configuration
+
+Add these at: `Settings → Secrets and variables → Actions`
+
+| Secret | Description | Example |
 |--------|-------------|---------|
-| `SERVER_HOST` | IP ou domaine du serveur | `192.168.1.100` |
-| `SERVER_USER` | Utilisateur SSH | `ubuntu` |
-| `SSH_PRIVATE_KEY` | Clé privée SSH | Contenu de `~/.ssh/id_rsa` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://user:pass@host:27017/eventease` |
+| `MONGODB_DATABASE` | Database name | `eventease_prod` |
+| `JWT_SECRET` | JWT secret key | `your-super-secret-jwt-key-here` |
 
-### Prérequis Serveur
-
-- ✅ Ubuntu/Debian
-- ✅ Docker 24.0+
-- ✅ Docker Compose 2.20+
-- ✅ Ports ouverts: 22 (SSH), 9020 (API), 27018 (MongoDB)
-
----
-
-## 📝 Commandes Rapides
-
-### Déploiement Local
-
+**Generate secure JWT secret:**
 ```bash
-# Déployer localement
-./scripts/deploy.sh local
-
-# Vérifier
-curl http://localhost:9020/health
-
-# Voir les logs
-./scripts/deploy.sh logs
+openssl rand -base64 32
 ```
 
-### Configuration Serveur
+### 3. Server Prerequisites
 
 ```bash
-# Sur le serveur distant
-bash setup-server.sh
-```
+# Install Docker
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
 
-### Validation
+# Add user to docker group
+sudo usermod -aG docker $USER
+# Log out and back in for this to take effect
 
-```bash
-# Vérifier la configuration
-./scripts/validate-cicd.sh
-```
-
-### Déploiement Distant
-
-```bash
-# Option 1: Via GitHub (automatique)
-git push origin main
-
-# Option 2: Manuel
-SERVER_HOST=192.168.1.100 SERVER_USER=ubuntu ./scripts/deploy.sh remote
+# Verify
+docker --version
+docker ps
 ```
 
 ---
 
-## 📊 Métriques
+## 🐳 Docker Configuration
 
-### Temps d'Exécution
+### Dockerfile (Multi-stage Build)
+```dockerfile
+# Build stage
+FROM maven:latest AS builder
+WORKDIR /app
+COPY pom.xml .
+RUN mvn -q -DskipTests dependency:go-offline
+COPY src ./src
+RUN mvn -q -DskipTests package
 
-| Stage | Durée Moyenne |
-|-------|---------------|
-| Build & Test | 5-7 min |
-| Docker Build | 3-5 min |
-| Deploy | 2-3 min |
-| Quality | 3-5 min |
-| **TOTAL** | **13-20 min** |
-
-### Couverture de Tests
-
-- ✅ 13 tests d'intégration
-- ✅ Tests avec Testcontainers (MongoDB)
-- ✅ Rapports JUnit et Jacoco
-
----
-
-## 🎯 Checklist de Déploiement
-
-### Avant le Premier Déploiement
-
-- [ ] Fichiers de pipeline créés
-- [ ] Scripts exécutables (`chmod +x`)
-- [ ] Serveur préparé avec `setup-server.sh`
-- [ ] Secrets GitHub configurés
-- [ ] Clé SSH testée
-- [ ] Validation réussie (`./scripts/validate-cicd.sh`)
-
-### Après le Déploiement
-
-- [ ] Pipeline exécutée avec succès
-- [ ] Tous les stages passent (vert)
-- [ ] Health check réussi
-- [ ] API accessible
-- [ ] Logs sans erreurs
-
----
-
-## 📚 Documentation
-
-### Fichiers de Documentation
-
-1. **o10_CICD_SABTI_Yousif.md** - Documentation complète (Page 10)
-   - Architecture détaillée
-   - Explication de chaque stage
-   - Configuration et déploiement
-   - Monitoring et résultats
-
-2. **QUICKSTART_CICD.md** - Guide de démarrage rapide
-   - Démarrage en 5 minutes
-   - Options de déploiement
-   - Résolution rapide des problèmes
-
-3. **.github/workflows/README.md** - Configuration pipeline
-   - Secrets requis
-   - Configuration du serveur
-   - Dépannage
-
-4. **scripts/README.md** - Documentation scripts
-   - Usage des scripts
-   - Commandes utiles
-   - Monitoring
-
----
-
-## 🔗 Liens Importants
-
-### GitHub
-
-- **Actions:** `https://github.com/VOTRE_USERNAME/EventEase/actions`
-- **Secrets:** `https://github.com/VOTRE_USERNAME/EventEase/settings/secrets/actions`
-- **Container Registry:** `https://github.com/VOTRE_USERNAME/EventEase/pkgs/container/eventease-backend`
-
-### Application
-
-- **Local:** `http://localhost:9020`
-- **Production:** `http://SERVER_IP:9020`
-- **Health Check:** `/health`
-- **API Docs:** `/swagger-ui.html` (si configuré)
-
----
-
-## 🐛 Dépannage Rapide
-
-### Tests échouent
-```bash
-cd EventEase/backend
-./mvnw clean test
+# Runtime stage
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","/app/app.jar"]
 ```
 
-### SSH échoue
-```bash
-ssh -i ~/.ssh/id_rsa SERVER_USER@SERVER_HOST
+### Version-Based Tagging
+The pipeline reads version from `pom.xml`:
+```xml
+<version>0.0.1-SNAPSHOT</version>
 ```
 
-### Docker build échoue
-```bash
-cd EventEase/backend
-docker build -t test .
-```
+Creates images:
+- `eventease-backend:0.0.1-SNAPSHOT`
+- `eventease-backend:latest`
 
-### Health check échoue
+---
+
+## 🚀 Deployment Process
+
+### Automatic Deployment Flow
+1. **Extract version** from `pom.xml`
+2. **Stop old container** (if exists)
+3. **Build new image** with version tag
+4. **Start new container** with environment variables
+5. **Verify** container is running
+6. **Clean up** old images
+
+### Container Configuration
+- **Name**: `eventease-backend`
+- **Port**: `8080:8080`
+- **Environment**: From `.env.prod` (created from secrets)
+- **Restart**: Automatic on failure
+
+---
+
+## 📊 Testing Strategy
+
+### Integration Tests
+- **Framework**: JUnit 5 + Spring Boot Test
+- **Database**: MongoDB 8.0 (GitHub Actions service)
+- **Isolation**: Clean database for each test run
+
+### Test Execution
 ```bash
-docker compose logs api
-curl http://localhost:9020/health
+# Local
+./mvnw test
+
+# Specific test
+./mvnw test -Dtest=AdminReservationIntegrationTest
+
+# With coverage
+./mvnw test jacoco:report
 ```
 
 ---
 
-## 🎓 Concepts Clés
+## 🔄 Development Workflow
 
-### CI (Continuous Integration)
-- ✅ Compilation automatique
-- ✅ Tests automatiques
-- ✅ Validation du code
-
-### CD (Continuous Deployment)
-- ✅ Build d'images Docker
-- ✅ Déploiement automatique
-- ✅ Health checks
-
-### Infrastructure as Code
-- ✅ Pipeline en YAML
-- ✅ Docker Compose
-- ✅ Scripts automatisés
-
----
-
-## 🚀 Améliorations Futures
-
-### Court Terme
-- [ ] Notifications Slack/Discord
-- [ ] Tests de performance
-- [ ] SonarQube
-
-### Moyen Terme
-- [ ] Multi-environnements (dev/staging/prod)
-- [ ] Blue/Green deployment
-- [ ] Monitoring (Prometheus/Grafana)
-
-### Long Terme
-- [ ] Kubernetes
-- [ ] Auto-scaling
-- [ ] Disaster Recovery
-
----
-
-## 📈 Bénéfices
-
-### Pour le Développement
-- ✅ Feedback rapide (13-20 min)
-- ✅ Tests automatiques
-- ✅ Détection précoce des bugs
-
-### Pour la Production
-- ✅ Déploiements fiables
-- ✅ Rollback facile
-- ✅ Traçabilité complète
-
-### Pour l'Équipe
-- ✅ Processus standardisé
-- ✅ Documentation complète
-- ✅ Moins d'erreurs manuelles
-
----
-
-## ✅ Validation Finale
-
-Pour valider que tout est en place:
-
+### 1. Local Development
 ```bash
-# 1. Valider la configuration
-./scripts/validate-cicd.sh
+# Build
+./mvnw clean package
 
-# 2. Tester localement
-./scripts/deploy.sh test
+# Run tests
+./mvnw test
 
-# 3. Déployer localement
-./scripts/deploy.sh local
+# Run locally
+java -jar target/backend-0.0.1-SNAPSHOT.jar
+```
 
-# 4. Pousser sur GitHub
+### 2. Push to GitHub
+```bash
 git add .
-git commit -m "feat: CI/CD pipeline"
-git push origin main
+git commit -m "feat: add new feature"
+git push origin develop
+```
 
-# 5. Vérifier dans GitHub Actions
-# Aller sur: https://github.com/VOTRE_USERNAME/EventEase/actions
+### 3. Automatic Pipeline
+- ✅ **Build** runs on all branches
+- ✅ **Test** runs after successful build
+- ✅ **Deploy** runs only on `main` or `develop` (self-hosted runner)
+
+---
+
+## 🎯 Branch Strategy
+
+| Branch | Build | Test | Deploy |
+|--------|-------|------|--------|
+| `main` | ✅ | ✅ | ✅ |
+| `develop` | ✅ | ✅ | ✅ |
+| Feature branches | ✅ | ✅ | ❌ |
+| Pull Requests | ✅ | ✅ | ❌ |
+
+---
+
+## 🔍 Monitoring & Debugging
+
+### View Logs
+```bash
+# Container logs
+docker logs eventease-backend
+docker logs -f eventease-backend  # Follow
+
+# Runner logs (on server)
+tail -f ~/actions-runner/_diag/*.log
+
+# Check container status
+docker ps
+docker inspect eventease-backend
+```
+
+### Common Commands
+```bash
+# Restart container
+docker restart eventease-backend
+
+# Stop container
+docker stop eventease-backend
+
+# Remove container
+docker rm eventease-backend
+
+# View images
+docker images | grep eventease
+
+# Clean up
+docker image prune -f
+docker container prune -f
 ```
 
 ---
 
-## 📞 Support
+## 🚨 Troubleshooting
 
-En cas de problème:
+### Runner Issues
+- **Not appearing**: Check token hasn't expired, verify service status
+- **Offline**: Restart service: `sudo ./svc.sh restart`
+- **Logs**: Check `~/actions-runner/_diag/*.log`
 
-1. Consulter la documentation dans `/docs`
-2. Vérifier les logs: `./scripts/deploy.sh logs`
-3. Valider la config: `./scripts/validate-cicd.sh`
-4. Tester localement: `./scripts/deploy.sh test`
+### Build Failures
+- Verify Java 17 is used
+- Check Maven dependencies
+- Review GitHub Actions logs
+
+### Test Failures
+- Check MongoDB service is starting
+- Review test logs in artifacts
+- Verify Testcontainers configuration
+
+### Deployment Issues
+- Verify Docker is installed and running
+- Check user has Docker permissions (no sudo needed)
+- Verify GitHub secrets are set correctly
+- Check port 8080 is available
+- Review container logs
 
 ---
 
-## 🎉 Conclusion
+## 📚 Key Files
 
-✅ **Pipeline CI/CD complète** - 4 stages automatisés  
-✅ **Scripts de déploiement** - Local et distant  
-✅ **Documentation complète** - Guides et références  
-✅ **Tests automatisés** - 13 tests d'intégration  
-✅ **Prêt pour la production** - Déploiement en 15-20 min
+| File | Purpose |
+|------|---------|
+| `.github/workflows/ci-cd.yml` | Pipeline configuration |
+| `EventEase/backend/Dockerfile` | Docker image definition |
+| `EventEase/backend/pom.xml` | Maven configuration & version |
+| `CICD_SETUP_GUIDE.md` | Detailed setup instructions |
+| `GITHUB_SECRETS_TEMPLATE.md` | Secrets configuration guide |
 
 ---
 
-**Auteur:** SABTI Yousif  
-**Date:** 2025-10-27  
-**Version:** 1.0  
-**Statut:** ✅ Production Ready
+## ✅ Pre-Deployment Checklist
 
-**Temps total de mise en place:** ≈ 4 heures  
-**Temps de déploiement:** ≈ 15-20 minutes  
-**Niveau de difficulté:** ⭐⭐⭐☆☆
+- [ ] Self-hosted runner installed and running on server
+- [ ] GitHub secrets configured (MONGODB_URI, MONGODB_DATABASE, JWT_SECRET)
+- [ ] Docker installed on server
+- [ ] User added to docker group
+- [ ] Port 8080 available on server
+- [ ] Tests passing locally
+- [ ] Version updated in pom.xml (if needed)
+
+---
+
+## 🎓 Comparison with .NET Pipeline
+
+Your pipeline follows the same pattern as your friend's:
+
+| Aspect | Friend (.NET) | You (Java) |
+|--------|--------------|------------|
+| **Build** | `dotnet publish` | `./mvnw package` |
+| **Test** | `dotnet test` | `./mvnw test` |
+| **Database** | MongoDB service | MongoDB service |
+| **Deploy Runner** | `self-hosted` | `self-hosted` |
+| **Version Source** | `.csproj` | `pom.xml` |
+| **Port** | 8001 | 8080 |
+| **Container Name** | `flemot-api` | `eventease-backend` |
+
+---
+
+## 📞 Next Steps
+
+1. ✅ Set up self-hosted runner on your server
+2. ✅ Configure GitHub secrets
+3. ✅ Test with a commit to `develop`
+4. ✅ Verify deployment on your server
+5. 📝 Monitor logs and performance
+6. 📝 Set up custom domain (optional)
+
+---
+
+**Last Updated**: 2025-10-28  
+**Pipeline Version**: 2.0.0  
+**Status**: ✅ Production Ready
