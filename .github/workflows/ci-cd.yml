@@ -112,33 +112,46 @@ jobs:
       - name: Build, Tag, and Deploy with Version
         working-directory: ./EventEase/backend
         run: |
-          # 1. Read the version from pom.xml
-          APP_VERSION=$(grep '<version>' pom.xml | head -1 | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/')
+          # 1. Read the version from pom.xml (skip parent version)
+          APP_VERSION=$(grep -m 1 '<version>' pom.xml | grep -v 'parent' | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+          if [ -z "$APP_VERSION" ]; then
+            APP_VERSION=$(sed -n '/<artifactId>backend<\/artifactId>/,/<\/version>/p' pom.xml | grep '<version>' | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+          fi
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
           
           echo "Deploying version: $APP_VERSION"
           
           # 2. Stop and remove the old container (if it exists)
-          docker stop $IMAGE_NAME || true
-          docker rm $IMAGE_NAME || true
+          docker stop $IMAGE_NAME 2>/dev/null || true
+          docker rm $IMAGE_NAME 2>/dev/null || true
           
           # 3. Build the new Docker image with version tag
           docker build -t ${IMAGE_NAME}:${APP_VERSION} .
           docker tag ${IMAGE_NAME}:${APP_VERSION} ${IMAGE_NAME}:latest
           
           # 4. Start the new container using the version tag
-          docker run -d \
+          CONTAINER_ID=$(docker run -d \
             --name $IMAGE_NAME \
             -p 8080:8080 \
             --env-file .env.prod \
-            ${IMAGE_NAME}:${APP_VERSION}
+            ${IMAGE_NAME}:${APP_VERSION})
+          
+          echo "Container started with ID: $CONTAINER_ID"
           
           # 5. Wait for container to be healthy
           echo "Waiting for application to start..."
-          sleep 10
+          sleep 15
           
-          # 6. Verify container is running
-          docker ps | grep $IMAGE_NAME
+          # 6. Check if container is still running
+          if ! docker ps | grep -q $IMAGE_NAME; then
+            echo "❌ Container failed to start! Logs:"
+            docker logs $IMAGE_NAME
+            exit 1
+          fi
+          
+          # 7. Check application logs
+          echo "Application logs:"
+          docker logs $IMAGE_NAME | tail -20
           
           echo "✅ Deployment successful!"
       
