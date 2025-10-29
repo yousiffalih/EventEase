@@ -101,16 +101,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Create production environment file
-        working-directory: ./EventEase/backend
+      - name: Verify secrets are set
         run: |
-          echo "SPRING_DATA_MONGODB_URI=${{ secrets.MONGODB_URI }}" > .env.prod
-          echo "SPRING_DATA_MONGODB_DATABASE=${{ secrets.MONGODB_DATABASE }}" >> .env.prod
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env.prod
-          echo "SERVER_PORT=8080" >> .env.prod
+          if [ -z "${{ secrets.MONGODB_URI }}" ]; then
+            echo "❌ MONGODB_URI secret is not set!"
+            exit 1
+          fi
+          if [ -z "${{ secrets.JWT_SECRET }}" ]; then
+            echo "❌ JWT_SECRET secret is not set!"
+            exit 1
+          fi
+          echo "✅ All required secrets are configured"
       
       - name: Build, Tag, and Deploy with Version
         working-directory: ./EventEase/backend
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DATABASE: ${{ secrets.MONGODB_DATABASE }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           # 1. Read the version from pom.xml (skip parent version)
           APP_VERSION=$(grep -m 1 '<version>' pom.xml | grep -v 'parent' | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
@@ -129,11 +137,14 @@ jobs:
           docker build -t ${IMAGE_NAME}:${APP_VERSION} .
           docker tag ${IMAGE_NAME}:${APP_VERSION} ${IMAGE_NAME}:latest
           
-          # 4. Start the new container using the version tag
+          # 4. Start the new container with environment variables
           CONTAINER_ID=$(docker run -d \
             --name $IMAGE_NAME \
             -p 8080:8080 \
-            --env-file .env.prod \
+            -e SPRING_DATA_MONGODB_URI="${MONGODB_URI}" \
+            -e SPRING_DATA_MONGODB_DATABASE="${MONGODB_DATABASE}" \
+            -e JWT_SECRET="${JWT_SECRET}" \
+            -e SERVER_PORT=8080 \
             ${IMAGE_NAME}:${APP_VERSION})
           
           echo "Container started with ID: $CONTAINER_ID"
