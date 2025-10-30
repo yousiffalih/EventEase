@@ -1,38 +1,44 @@
 name: EventEase Backend CI/CD
 
+# 🚀 تحديد متى يتم تشغيل الـ pipeline
 on:
-  push:
-    branches: [ "main", "develop" ]
-  pull_request:
+  push:                         # عند كل عملية "push"
+    branches: [ "main", "develop" ]   # على الفروع الرئيسية فقط
+  pull_request:                 # أو عند فتح pull request
     branches: [ "main" ]
 
+# 🌍 متغيرات عامة تُستخدم في جميع المراحل
 env:
-  JAVA_VERSION: '17'
-  IMAGE_NAME: eventease-backend
+  JAVA_VERSION: '17'            # إصدار الجافا المستخدم
+  IMAGE_NAME: eventease-backend # اسم الصورة (image) في Docker
 
 jobs:
   # ========================================
-  # 🏗️ BUILD JOB
+  # 🏗️ المرحلة الأولى: البناء (BUILD)
   # ========================================
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest      # يشتغل على نظام Ubuntu في GitHub Actions
     
     steps:
+      # 🔽 1. جلب الكود من المستودع
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # ☕ 2. إعداد بيئة الجافا (JDK 17)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: 'maven'
+          distribution: 'temurin' # توزيعة مفتوحة المصدر من Java
+          cache: 'maven'          # تفعيل الكاش لتسريع البناء
       
+      # 🧱 3. بناء المشروع باستخدام Maven بدون تشغيل الاختبارات
       - name: Build with Maven
         working-directory: ./EventEase/backend
         run: |
           ./mvnw clean package -DskipTests
       
+      # 📦 4. رفع ملف الـ JAR الناتج كـ artifact لاستخدامه لاحقًا
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -40,13 +46,14 @@ jobs:
           path: EventEase/backend/target/*.jar
 
   # ========================================
-  # 🧪 TEST JOB
+  # 🧪 المرحلة الثانية: الاختبارات (TEST)
   # ========================================
   test:
-    runs-on: ubuntu-latest
-    needs: build
+    runs-on: ubuntu-latest      # يشتغل على Ubuntu
+    needs: build                # يعتمد على نجاح مرحلة الـ build
     
     services:
+      # 🗄️ خدمة MongoDB تُشغل داخل الحاوية (Docker container)
       mongodb:
         image: mongo:8.0
         ports:
@@ -58,9 +65,11 @@ jobs:
           --health-retries 5
     
     steps:
+      # 🔽 1. جلب الكود من المستودع
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # ☕ 2. إعداد الجافا
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -68,12 +77,14 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       
+      # 📥 3. تنزيل ملف الـ JAR الناتج من مرحلة الـ build
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: eventease-backend-jar
           path: ./EventEase/backend/target
       
+      # 🧪 4. تشغيل اختبارات التكامل (integration tests)
       - name: Run integration tests
         working-directory: ./EventEase/backend
         run: |
@@ -81,6 +92,7 @@ jobs:
         env:
           SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/eventease_test
       
+      # 📊 5. رفع تقارير النتائج إلى GitHub Actions (للرجوع إليها لاحقًا)
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,17 +102,19 @@ jobs:
           retention-days: 30
 
   # ========================================
-  # 🚀 DEPLOY JOB
+  # 🚀 المرحلة الثالثة: النشر (DEPLOY)
   # ========================================
   deploy:
-    runs-on: self-hosted
-    needs: test
+    runs-on: self-hosted        # يشتغل على السيرفر المحلي (runner)
+    needs: test                 # يعتمد على نجاح مرحلة الاختبار
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     
     steps:
+      # 🔽 1. جلب الكود مرة أخرى
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # 🔐 2. التأكد من وجود جميع الأسرار (Secrets)
       - name: Verify secrets are set
         run: |
           if [ -z "${{ secrets.MONGODB_URI }}" ]; then
@@ -113,6 +127,7 @@ jobs:
           fi
           echo "✅ All required secrets are configured"
       
+      # 🐳 3. بناء الصورة Docker وتشغيل التطبيق داخلها
       - name: Build, Tag, and Deploy with Version
         working-directory: ./EventEase/backend
         env:
@@ -120,24 +135,24 @@ jobs:
           MONGODB_DATABASE: ${{ secrets.MONGODB_DATABASE }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
-          # 1. Read the version from pom.xml (skip parent version)
+          # 🔹 قراءة رقم الإصدار من ملف pom.xml
           APP_VERSION=$(grep -m 1 '<version>' pom.xml | grep -v 'parent' | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
           if [ -z "$APP_VERSION" ]; then
             APP_VERSION=$(sed -n '/<artifactId>backend<\/artifactId>/,/<\/version>/p' pom.xml | grep '<version>' | sed -e 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
           fi
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
           
-          echo "Deploying version: $APP_VERSION"
+          echo "🚀 نشر النسخة رقم: $APP_VERSION"
           
-          # 2. Stop and remove the old container (if it exists)
+          # 🧹 إيقاف وإزالة أي حاوية قديمة بنفس الاسم
           docker stop $IMAGE_NAME 2>/dev/null || true
           docker rm $IMAGE_NAME 2>/dev/null || true
           
-          # 3. Build the new Docker image with version tag
+          # 🧱 بناء صورة Docker جديدة بالإصدار الحالي
           docker build -t ${IMAGE_NAME}:${APP_VERSION} .
           docker tag ${IMAGE_NAME}:${APP_VERSION} ${IMAGE_NAME}:latest
           
-          # 4. Start the new container with environment variables
+          # ▶️ تشغيل التطبيق داخل الحاوية الجديدة
           CONTAINER_ID=$(docker run -d \
             --name $IMAGE_NAME \
             -p 8080:8080 \
@@ -147,52 +162,49 @@ jobs:
             -e SERVER_PORT=8080 \
             ${IMAGE_NAME}:${APP_VERSION})
           
-          echo "Container started with ID: $CONTAINER_ID"
+          echo "✅ التطبيق يعمل داخل الحاوية ID: $CONTAINER_ID"
           
-          # 5. Wait for container to be healthy
-          echo "Waiting for application to start..."
+          # ⏳ الانتظار قليلاً قبل الفحص
+          echo "⏳ الانتظار لتأكيد التشغيل..."
           sleep 15
           
-          # 6. Check if container is still running
+          # 🔍 التحقق من أن الحاوية تعمل فعلاً
           if ! docker ps | grep -q $IMAGE_NAME; then
-            echo "❌ Container failed to start! Logs:"
+            echo "❌ فشل تشغيل الحاوية! عرض السجلات:"
             docker logs $IMAGE_NAME
             exit 1
           fi
           
-          # 7. Check application logs
-          echo "Application logs:"
+          # 📜 عرض آخر 20 سطر من السجلات
+          echo "📜 آخر السجلات:"
           docker logs $IMAGE_NAME | tail -20
           
-          echo "✅ Deployment successful!"
+          echo "🎉 تم النشر بنجاح!"
       
+      # 🧼 4. تنظيف الصور القديمة لتوفير مساحة
       - name: Clean up old images
         run: |
           docker image prune -f
 
 # ========================================
-# 📋 Pipeline Summary
+# 📋 ملخص الـ Pipeline
 # ========================================
 # 
-# 1. BUILD
-#    - Compile with Maven
-#    - Create JAR artifact
+# 🏗️ BUILD
+#    - بناء المشروع وإنشاء JAR
 # 
-# 2. TEST
-#    - Run integration tests with MongoDB service
-#    - Upload test results
+# 🧪 TEST
+#    - تشغيل الاختبارات باستخدام MongoDB
 # 
-# 3. DEPLOY (self-hosted runner)
-#    - Create environment file with secrets
-#    - Build Docker image with version from pom.xml
-#    - Stop old container, start new one
-#    - Clean up old images
+# 🚀 DEPLOY
+#    - بناء الصورة Docker وتشغيلها على السيرفر
+#    - بدون نسخ الكود المصدري إلى السيرفر
 # 
 # ========================================
 # 
-# Required GitHub Secrets:
-# - MONGODB_URI: MongoDB connection string
-# - MONGODB_DATABASE: Database name
-# - JWT_SECRET: JWT secret key
+# 🔑 Secrets المطلوبة:
+# - MONGODB_URI: رابط قاعدة البيانات
+# - MONGODB_DATABASE: اسم القاعدة
+# - JWT_SECRET: مفتاح JWT السري
 # 
 # ========================================
